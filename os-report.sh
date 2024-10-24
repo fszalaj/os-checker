@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the output file path
-output_file="/opt/atosans/test/system_verification_report.txt"
+output_file="/opt/atosans/os-checker/system_verification_report.txt"
 
 # Ensure the directory exists
 mkdir -p /opt/atosans/test

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the input report file
-report_file="/opt/atosans/test/system_verification_report.txt"
+report_file="/opt/atosans/os-checer/system_verification_report.txt"
 
 # Check if the report file exists
 if [ ! -f "$report_file" ]; then

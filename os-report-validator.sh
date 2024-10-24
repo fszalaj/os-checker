@@ -90,47 +90,50 @@ check_section() {
 echo "Validation Summary:"
 echo "----------------------------------------"
 
-# 1. Network Interfaces and IPs
+# 1. Filesystems Check
+check_section "Filesystems Check" "df command not found"
+
+# 2. Network Interfaces and IPs
 check_section "Network Interfaces and IPs" "ip command not found"
 
-# 2. Timezone Configuration
+# 3. Connectivity Checks
+check_section "Connectivity Checks" "Connection to .* failed|Connection to .* timed out|failed|error|timed out|nc command not found"
+
+# 4. Timezone Configuration
 check_section "Timezone Configuration" "failed|error|not found|set to UTC"
 
-# 3. NTP Configuration
+# 5. NTP Configuration
 check_section "NTP Configuration" "chronyc command not found|Default NTP servers found|ATOS NTP servers are not configured"
 
-# 4. Firewall Configuration
+# 6. Firewall Configuration
 check_section "Firewall Configuration" "failed|error|not found|ERROR|firewalld is not enabled|Management zone is not active|Production zone is not active|No custom services found"
 
-# 5. Sudoers Configuration
+# 7. Sudoers Configuration
 check_section "Sudoers Configuration" "NOPASSWD for wheel group not found"
 
-# 6. CrowdStrike \(AV/EDR\)
-check_section "CrowdStrike \(AV/EDR\)" "rfm-state=true|falcon-sensor service not found|Failed to connect to CrowdStrike proxy|failed|error|not found"
+# 8. CrowdStrike \(AV/EDR\)
+check_section "CrowdStrike \(AV/EDR\)" "falcon-sensor service not found|Failed to connect to CrowdStrike proxy|failed|error|not found"
 
-# 7. AISAAC Agent \(MDR\)
+# 9. AISAAC Agent \(MDR\)
 check_section "AISAAC Agent \(MDR\)" "AISAAC agent service not found|Connection to Paladion gateway on port .* failed or timed out|failed|error|timed out"
 
-# 8. Nagios CMF Agents
+# 10. Nagios CMF Agents
 check_section "Nagios CMF Agents" "Nagios NaCl cron job not found in nagios user's crontab|Connection to Nagios server failed|Connection to Nagios backup server failed|ASE agent not found"
 
-# 9. RSCD \(TSSA Agent\)
+# 11. RSCD \(TSSA Agent\)
 check_section "RSCD \(TSSA Agent\)" "RSCD service not found|RSCD is not listening on port 4750|Proper entry not found in /etc/rsc/users.local|Proper entry not found in /etc/rsc/exports|failed|error|not found"
 
-# 10. CyberArk Accounts
+# 12. CyberArk Accounts
 check_section "CyberArk Accounts" "User atosans not found|User atosadm not found|User .+ is not in group allowssh|User .+ is not in group wheel|Group allowssh not found"
 
-# 11. Alcatraz Scanner
+# 13. Alcatraz Scanner
 # Since findings are expected, consider this section as PASS
 passed_checks=$((passed_checks + 1))
 total_checks=$((total_checks + 1))
 echo "[PASS] Alcatraz Scanner"
 
-# 12. SOXDB Scanner
+# 14. SOXDB Scanner
 check_section "SOXDB Scanner" "failed|error|not found|User atosadm not found|Group wheel not found|Failed to get password aging information"
-
-# 13. Connectivity Checks
-check_section "Connectivity Checks" "Connection to .* failed|Connection to .* timed out|failed|error|timed out|nc command not found"
 
 echo "----------------------------------------"
 echo "Total Checks: $total_checks"

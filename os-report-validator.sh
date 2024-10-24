@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the input report file
-report_file="/opt/atosans/os-checer/system_verification_report.txt"
+report_file="/opt/atosans/os-checker/system_verification_report.txt"
 
 # Check if the report file exists
 if [ ! -f "$report_file" ]; then
@@ -25,6 +25,7 @@ check_section() {
     shift
     error_patterns=("$@")
     section_passed=true
+    error_messages=()
 
     # Escape special regex characters in section_name
     escaped_section_name=$(escape_regex "$section_name")
@@ -34,9 +35,10 @@ check_section() {
 
     # Check for error patterns
     for pattern in "${error_patterns[@]}"; do
-        if echo "$section_content" | grep -qiE "$pattern"; then
+        matches=$(echo "$section_content" | grep -iE "$pattern")
+        if [ -n "$matches" ]; then
             section_passed=false
-            break
+            error_messages+=("$matches")
         fi
     done
 
@@ -47,6 +49,10 @@ check_section() {
     else
         failed_checks=$((failed_checks + 1))
         echo "[FAIL] $section_name"
+        echo "  Errors found:"
+        for msg in "${error_messages[@]}"; do
+            echo "    $msg"
+        done
     fi
 }
 
@@ -60,14 +66,13 @@ check_section "Timezone Configuration" "failed|error|not found"
 check_section "NTP Configuration" "failed|error|not found"
 
 # 3. Firewall Configuration
-# Adjust error patterns to avoid false positives
-check_section "Firewall Configuration" "Failed to start|firewall service not found"
+check_section "Firewall Configuration" "failed|error|not found|ERROR"
 
 # 4. CrowdStrike (AV/EDR)
 check_section "CrowdStrike (AV/EDR)" "rfm-state=false|failed|error|not found"
 
 # 5. AISAAC Agent (MDR)
-check_section "AISAAC Agent (MDR)" "AISAAC agent service not found"
+check_section "AISAAC Agent (MDR)" "AISAAC agent service not found|failed|error|timed out"
 
 # 6. Nagios CMF Agents
 check_section "Nagios CMF Agents" "Nagios NaCl cron job not found|Connection to Nagios server failed|Connection to Nagios backup server failed"
@@ -79,7 +84,6 @@ check_section "RSCD (TSSA Agent)" "failed|error|not found"
 check_section "CyberArk Accounts" "Users atosans and atosadm not found"
 
 # 9. Alcatraz Scanner
-# Removed "<FINDING>" from error patterns
 check_section "Alcatraz Scanner" "failed|error|not found"
 
 # 10. SOXDB Scanner

@@ -77,7 +77,18 @@ install_utilities() {
 # Install utilities if needed
 install_utilities
 
-# 1. Network Interfaces and IPs
+# 1. Filesystems Check
+log_time "Filesystems Check"
+append_title "Filesystems Check"
+echo "Checking filesystem disk space usage..." >> "$output_file"
+if command_exists df; then
+  df -h >> "$output_file" 2>&1
+else
+  echo "df command not found." >> "$output_file"
+fi
+end_time
+
+# 2. Network Interfaces and IPs
 log_time "Network Interfaces and IPs"
 append_title "Network Interfaces and IPs"
 echo "Listing network interfaces and IP addresses..." >> "$output_file"
@@ -86,11 +97,53 @@ if command_exists ip; then
 else
   echo "ip command not found." >> "$output_file"
 fi
-echo "Disk Usage Information (df -a):" >> "$output_file"
-df -a >> "$output_file" 2>&1
 end_time
 
-# 2. Timezone Configuration
+# 3. Connectivity Checks
+log_time "Connectivity Checks"
+append_title "Connectivity Checks"
+echo "Checking connectivity to Nagios gateways..." >> "$output_file"
+nagios_servers=("161.89.176.188" "161.89.164.82" "155.45.163.181" "161.89.112.32")
+for server in "${nagios_servers[@]}"; do
+  echo "Testing connection to $server:443..." >> "$output_file"
+  if command_exists nc; then
+    timeout 5 nc -zv "$server" 443 >> "$output_file" 2>&1 && echo "Connection to $server:443 successful." >> "$output_file" || echo "Connection to $server:443 failed or timed out." >> "$output_file"
+  else
+    echo "nc command not found." >> "$output_file"
+  fi
+done
+
+echo "Checking connectivity to CrowdStrike proxy..." >> "$output_file"
+crowdstrike_proxy="161.89.57.59"
+echo "Testing connection to $crowdstrike_proxy:8080..." >> "$output_file"
+if command_exists nc; then
+  timeout 5 nc -zv "$crowdstrike_proxy" 8080 >> "$output_file" 2>&1 && echo "Connection to $crowdstrike_proxy:8080 successful." >> "$output_file" || echo "Connection to $crowdstrike_proxy:8080 failed or timed out." >> "$output_file"
+else
+  echo "nc command not found." >> "$output_file"
+fi
+
+echo "Checking connectivity to RPM Package repository..." >> "$output_file"
+rpm_repo="155.45.172.37"
+echo "Testing connection to $rpm_repo:443..." >> "$output_file"
+if command_exists nc; then
+  timeout 5 nc -zv "$rpm_repo" 443 >> "$output_file" 2>&1 && echo "Connection to $rpm_repo:443 successful." >> "$output_file" || echo "Connection to $rpm_repo:443 failed or timed out." >> "$output_file"
+else
+  echo "nc command not found." >> "$output_file"
+fi
+
+echo "Checking connectivity to AISAAC / MDR / Paladion gateway..." >> "$output_file"
+paladion_ip="155.45.244.104"
+for port in 443 8443; do
+  echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
+  if command_exists nc; then
+    timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to $paladion_ip:$port successful." >> "$output_file" || echo "Connection to $paladion_ip:$port failed or timed out." >> "$output_file"
+  else
+    echo "nc command not found." >> "$output_file"
+  fi
+done
+end_time
+
+# 4. Timezone Configuration
 log_time "Timezone Configuration"
 append_title "Timezone Configuration"
 echo "Checking timezone configuration..." >> "$output_file"
@@ -103,7 +156,7 @@ else
 fi
 end_time
 
-# 3. NTP Configuration
+# 5. NTP Configuration
 log_time "NTP Configuration"
 append_title "NTP Configuration"
 echo "Checking NTP server configuration..." >> "$output_file"
@@ -136,7 +189,7 @@ else
 fi
 end_time
 
-# 4. Firewall Configuration
+# 6. Firewall Configuration
 log_time "Firewall Configuration"
 append_title "Firewall Configuration"
 echo "Checking firewalld service status..." >> "$output_file"
@@ -198,7 +251,7 @@ else
 fi
 end_time
 
-# Sudoers Configuration
+# 7. Sudoers Configuration
 log_time "Sudoers Configuration"
 append_title "Sudoers Configuration"
 echo "Checking sudoers configuration..." >> "$output_file"
@@ -219,7 +272,7 @@ if [ "$found_nopasswd" = false ]; then
 fi
 end_time
 
-# 5. CrowdStrike (AV/EDR)
+# 8. CrowdStrike (AV/EDR)
 log_time "CrowdStrike (AV/EDR)"
 append_title "CrowdStrike (AV/EDR)"
 echo "Checking falcon-sensor status..." >> "$output_file"
@@ -236,22 +289,23 @@ else
   echo "curl command not found." >> "$output_file"
 fi
 
-echo "Getting falcon-sensor status..." >> "$output_file"
+echo "Getting falcon-sensor configuration..." >> "$output_file"
 if [ -f /opt/CrowdStrike/falconctl ]; then
-  /opt/CrowdStrike/falconctl -g --rfm-state >> "$output_file" 2>&1
-  /opt/CrowdStrike/falconctl -g --rfm-history >> "$output_file" 2>&1
-  /opt/CrowdStrike/falconctl -g --aid --tags --aph --app >> "$output_file" 2>&1
-  if command_exists mokutil; then
-    mokutil --sb-state >> "$output_file" 2>&1
-  else
-    echo "mokutil command not found." >> "$output_file"
-  fi
+  mgmt_console="https://ts01-b.cloudsink.net"
+  cid_output=$(/opt/CrowdStrike/falconctl -g --cid)
+  aph_output=$(/opt/CrowdStrike/falconctl -g --aph)
+  app_output=$(/opt/CrowdStrike/falconctl -g --app)
+  echo "Management Console URL: $mgmt_console" >> "$output_file"
+  echo "Service Parameters:" >> "$output_file"
+  echo "  $cid_output" >> "$output_file"
+  echo "  $aph_output" >> "$output_file"
+  echo "  $app_output" >> "$output_file"
 else
   echo "falconctl not found." >> "$output_file"
 fi
 end_time
 
-# 6. AISAAC Agent (MDR)
+# 9. AISAAC Agent (MDR)
 log_time "AISAAC Agent (MDR)"
 append_title "AISAAC Agent (MDR)"
 echo "Checking AISAAC agent status..." >> "$output_file"
@@ -275,7 +329,7 @@ else
 fi
 end_time
 
-# 7. Nagios CMF Agents
+# 10. Nagios CMF Agents
 log_time "Nagios CMF Agents"
 append_title "Nagios CMF Agents"
 echo "Checking ase service status..." >> "$output_file"
@@ -293,7 +347,7 @@ else
   echo "nc command not found." >> "$output_file"
 fi
 
-echo "Checking Nagios cron job..." >> "$output_file"
+echo "Checking Nagios NaCl cron job for 'nagios' user..." >> "$output_file"
 if command_exists crontab; then
   if crontab -u nagios -l | grep -q NaCl; then
     crontab -u nagios -l | grep NaCl >> "$output_file" 2>&1
@@ -305,7 +359,7 @@ else
 fi
 end_time
 
-# 8. RSCD (TSSA Agent)
+# 11. RSCD (TSSA Agent)
 log_time "RSCD (TSSA Agent)"
 append_title "RSCD (TSSA Agent)"
 echo "Checking RSCD service status..." >> "$output_file"
@@ -354,7 +408,7 @@ else
 fi
 end_time
 
-# 9. CyberArk Accounts
+# 12. CyberArk Accounts
 log_time "CyberArk Accounts"
 append_title "CyberArk Accounts"
 echo "Checking for atosans and atosadm users..." >> "$output_file"
@@ -397,7 +451,7 @@ else
 fi
 end_time
 
-# 10. Alcatraz Scanner
+# 13. Alcatraz Scanner
 log_time "Alcatraz Scanner"
 append_title "Alcatraz Scanner"
 echo "Running Alcatraz scan..." >> "$output_file"
@@ -415,7 +469,7 @@ else
 fi
 end_time
 
-# 11. SOXDB Scanner
+# 14. SOXDB Scanner
 log_time "SOXDB Scanner"
 append_title "SOXDB Scanner"
 echo "Checking atosadm user management configuration..." >> "$output_file"
@@ -430,52 +484,6 @@ if id "atosadm" >/dev/null 2>&1; then
 else
   echo "User atosadm not found." >> "$output_file"
 fi
-end_time
-
-# 12. Connectivity Checks
-log_time "Connectivity Checks"
-append_title "Connectivity Checks"
-echo "Checking connectivity to Nagios gateways..." >> "$output_file"
-nagios_servers=("161.89.176.188" "161.89.164.82" "155.45.163.181" "161.89.112.32")
-for server in "${nagios_servers[@]}"; do
-  echo "Testing connection to $server:443..." >> "$output_file"
-  if command_exists nc; then
-    timeout 5 nc -zv "$server" 443 >> "$output_file" 2>&1 && echo "Connection to $server:443 successful." >> "$output_file" || echo "Connection to $server:443 failed or timed out." >> "$output_file"
-  else
-    echo "nc command not found." >> "$output_file"
-  fi
-done
-
-echo "Checking connectivity to CrowdStrike proxy..." >> "$output_file"
-crowdstrike_proxy="161.89.57.59"
-echo "Testing connection to $crowdstrike_proxy:8080..." >> "$output_file"
-if command_exists nc; then
-  timeout 5 nc -zv "$crowdstrike_proxy" 8080 >> "$output_file" 2>&1 && echo "Connection to $crowdstrike_proxy:8080 successful." >> "$output_file" || echo "Connection to $crowdstrike_proxy:8080 failed or timed out." >> "$output_file"
-else
-  echo "nc command not found." >> "$output_file"
-fi
-
-echo "Checking connectivity to RPM Package repository..." >> "$output_file"
-rpm_repo="155.45.172.37"
-echo "Testing connection to $rpm_repo:443..." >> "$output_file"
-if command_exists nc; then
-  timeout 5 nc -zv "$rpm_repo" 443 >> "$output_file" 2>&1 && echo "Connection to $rpm_repo:443 successful." >> "$output_file" || echo "Connection to $rpm_repo:443 failed or timed out." >> "$output_file"
-else
-  echo "nc command not found." >> "$output_file"
-fi
-
-echo "Checking connectivity to AISAAC / MDR / Paladion gateway..." >> "$output_file"
-if [ -z "$paladion_ip" ]; then
-  paladion_ip="155.45.244.104"
-fi
-for port in 443 8443; do
-  echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
-  if command_exists nc; then
-    timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to $paladion_ip:$port successful." >> "$output_file" || echo "Connection to $paladion_ip:$port failed or timed out." >> "$output_file"
-  else
-    echo "nc command not found." >> "$output_file"
-  fi
-done
 end_time
 
 # End of report

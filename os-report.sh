@@ -231,7 +231,45 @@ end_time
 # Connectivity Checks
 log_time "Connectivity Checks"
 append_title "Connectivity Checks"
-# (Add your connectivity checks here, similar to previous examples)
+echo "Checking connectivity to Nagios gateways..." >> "$output_file"
+nagios_servers=("161.89.176.188" "161.89.164.82" "155.45.163.181" "161.89.112.32")
+for server in "${nagios_servers[@]}"; do
+    echo "Testing connection to $server:443..." >> "$output_file"
+    if command_exists nc; then
+        timeout 5 nc -zv "$server" 443 >> "$output_file" 2>&1 && echo "Connection to $server:443 successful." >> "$output_file" || echo "Connection to $server:443 failed or timed out." >> "$output_file"
+    else
+        echo "nc command not found." >> "$output_file"
+    fi
+done
+
+echo "Checking connectivity to CrowdStrike proxy..." >> "$output_file"
+crowdstrike_proxy="161.89.57.59"
+echo "Testing connection to $crowdstrike_proxy:8080..." >> "$output_file"
+if command_exists nc; then
+    timeout 5 nc -zv "$crowdstrike_proxy" 8080 >> "$output_file" 2>&1 && echo "Connection to $crowdstrike_proxy:8080 successful." >> "$output_file" || echo "Connection to $crowdstrike_proxy:8080 failed or timed out." >> "$output_file"
+else
+    echo "nc command not found." >> "$output_file"
+fi
+
+echo "Checking connectivity to RPM Package repository..." >> "$output_file"
+rpm_repo="155.45.172.37"
+echo "Testing connection to $rpm_repo:443..." >> "$output_file"
+if command_exists nc; then
+    timeout 5 nc -zv "$rpm_repo" 443 >> "$output_file" 2>&1 && echo "Connection to $rpm_repo:443 successful." >> "$output_file" || echo "Connection to $rpm_repo:443 failed or timed out." >> "$output_file"
+else
+    echo "nc command not found." >> "$output_file"
+fi
+
+echo "Checking connectivity to AISAAC / MDR / Paladion gateway..." >> "$output_file"
+paladion_ip="155.45.244.104"
+for port in 443 8443; do
+    echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
+    if command_exists nc; then
+        timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to $paladion_ip:$port successful." >> "$output_file" || echo "Connection to $paladion_ip:$port failed or timed out." >> "$output_file"
+    else
+        echo "nc command not found." >> "$output_file"
+    fi
+done
 end_time
 
 # Timezone Configuration
@@ -291,7 +329,216 @@ if [ "$found_nopasswd" = false ]; then
 fi
 end_time
 
-# (Continue with other sections in a similar fashion)
+# CrowdStrike (AV/EDR)
+log_time "CrowdStrike (AV/EDR)"
+append_title "CrowdStrike (AV/EDR)"
+echo "Checking falcon-sensor status..." >> "$output_file"
+check_service_status "falcon-sensor"
+
+echo "Checking CrowdStrike proxy connectivity..." >> "$output_file"
+if command_exists curl; then
+    curl -k --connect-timeout 10 https://ts01-b.cloudsink.net -x http://nlproxy3.atos-srv.net:8080 >> "$output_file" 2>&1 || echo "Failed to connect to CrowdStrike proxy." >> "$output_file"
+else
+    echo "curl command not found." >> "$output_file"
+fi
+
+echo "Getting falcon-sensor configuration..." >> "$output_file"
+if [ -f /opt/CrowdStrike/falconctl ]; then
+    mgmt_console="https://ts01-b.cloudsink.net"
+    cid_output=$(/opt/CrowdStrike/falconctl -g --cid)
+    aph_output=$(/opt/CrowdStrike/falconctl -g --aph)
+    app_output=$(/opt/CrowdStrike/falconctl -g --app)
+    echo "Management Console URL: $mgmt_console" >> "$output_file"
+    echo "Service Parameters:" >> "$output_file"
+    echo "  $cid_output" >> "$output_file"
+    echo "  $aph_output" >> "$output_file"
+    echo "  $app_output" >> "$output_file"
+else
+    echo "falconctl not found." >> "$output_file"
+fi
+end_time
+
+# AISAAC Agent (MDR)
+log_time "AISAAC Agent (MDR)"
+append_title "AISAAC Agent (MDR)"
+echo "Checking AISAAC agent status..." >> "$output_file"
+check_service_status "proddefthmdr"
+
+echo "Checking connectivity to Paladion gateway..." >> "$output_file"
+if command_exists nc; then
+    paladion_ip=$(grep Address /etc/Paladion/AiSaacServer.conf | sed -n 's/.*<Address>\(.*\)<\/Address>.*/\1/p')
+    if [ -z "$paladion_ip" ]; then
+        paladion_ip="161.89.16.217" # Default value if not found
+    fi
+    for port in 443 8443; do
+        timeout 10 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to Paladion gateway on port $port successful." >> "$output_file" || echo "Connection to Paladion gateway on port $port failed or timed out." >> "$output_file"
+    done
+else
+    echo "nc command not found." >> "$output_file"
+fi
+end_time
+
+# Nagios CMF Agents
+log_time "Nagios CMF Agents"
+append_title "Nagios CMF Agents"
+echo "Checking ASE agent status..." >> "$output_file"
+if [ -f /opt/ASE/bin/ase ]; then
+    /opt/ASE/bin/ase status >> "$output_file" 2>&1
+else
+    echo "ASE agent not found." >> "$output_file"
+fi
+
+echo "Checking Nagios connectivity..." >> "$output_file"
+if command_exists nc; then
+    timeout 10 nc -zv 161.89.176.188 443 >> "$output_file" 2>&1 && echo "Connection to Nagios server successful." >> "$output_file" || echo "Connection to Nagios server failed or timed out." >> "$output_file"
+    timeout 10 nc -zv 155.45.163.181 443 >> "$output_file" 2>&1 && echo "Connection to Nagios backup server successful." >> "$output_file" || echo "Connection to Nagios backup server failed or timed out." >> "$output_file"
+else
+    echo "nc command not found." >> "$output_file"
+fi
+
+echo "Checking Nagios NaCl cron job for 'nagios' user..." >> "$output_file"
+if command_exists crontab; then
+    if crontab -u nagios -l | grep -q NaCl; then
+        crontab -u nagios -l | grep NaCl >> "$output_file" 2>&1
+    else
+        echo "Nagios NaCl cron job not found in nagios user's crontab." >> "$output_file"
+    fi
+else
+    echo "crontab command not found." >> "$output_file"
+fi
+end_time
+
+# RSCD (TSSA Agent)
+log_time "RSCD (TSSA Agent)"
+append_title "RSCD (TSSA Agent)"
+echo "Checking RSCD service status..." >> "$output_file"
+check_service_status "rscd"
+
+echo "Checking if RSCD is listening on port 4750..." >> "$output_file"
+if command_exists netstat; then
+    netstat -tulpn | grep ':4750' >> "$output_file" 2>&1
+    if [ $? -eq 0 ]; then
+        echo "RSCD is listening on port 4750." >> "$output_file"
+    else
+        echo "RSCD is not listening on port 4750." >> "$output_file"
+    fi
+else
+    echo "netstat command not found." >> "$output_file"
+fi
+
+echo "Checking /etc/rsc/users.local configuration..." >> "$output_file"
+if [ -f /etc/rsc/users.local ]; then
+    users_local_content=$(cat /etc/rsc/users.local)
+    echo "$users_local_content" >> "$output_file"
+    if echo "$users_local_content" | grep -Eq '^(EvidianSN_L3AdminL|SENRG_L3AdminL|ASN-Atos_L3AdminL):\*.*rw,map=root'; then
+        echo "Proper entry found in /etc/rsc/users.local." >> "$output_file"
+    else
+        echo "Proper entry not found in /etc/rsc/users.local. Please add it." >> "$output_file"
+    fi
+else
+    echo "/etc/rsc/users.local not found." >> "$output_file"
+fi
+
+echo "Checking /etc/rsc/exports configuration..." >> "$output_file"
+if [ -f /etc/rsc/exports ]; then
+    exports_content=$(cat /etc/rsc/exports)
+    echo "$exports_content" >> "$output_file"
+    if echo "$exports_content" | grep -Eq '^\*\s+rw'; then
+        echo "Proper entry found in /etc/rsc/exports." >> "$output_file"
+    else
+        echo "Proper entry not found in /etc/rsc/exports. Please add '*   rw'." >> "$output_file"
+    fi
+else
+    echo "/etc/rsc/exports not found." >> "$output_file"
+fi
+end_time
+
+# CyberArk Accounts
+log_time "CyberArk Accounts"
+append_title "CyberArk Accounts"
+echo "Checking for atosans and atosadm users..." >> "$output_file"
+for user in atosans atosadm; do
+    if id "$user" >/dev/null 2>&1; then
+        echo "User $user exists." >> "$output_file"
+        user_groups=$(id -nG "$user")
+        echo "User $user is in groups: $user_groups" >> "$output_file"
+        # Check if user is in allowssh group
+        if echo "$user_groups" | grep -qw "allowssh"; then
+            echo "User $user is in group allowssh." >> "$output_file"
+        else
+            echo "User $user is not in group allowssh." >> "$output_file"
+        fi
+        # Check if user is in admin group
+        is_user_in_admin_group "$user"
+        # Check password expiry
+        if command_exists chage; then
+            password_expiry=$(chage -l "$user" | grep 'Password expires' | cut -d: -f2 | xargs)
+            if [ "$password_expiry" = "never" ]; then
+                echo "User $user has non-expiring password." >> "$output_file"
+            else
+                echo "User $user has password expiry set to: $password_expiry" >> "$output_file"
+            fi
+        else
+            echo "chage command not found." >> "$output_file"
+        fi
+    else
+        echo "User $user not found." >> "$output_file"
+    fi
+done
+# Check if group allowssh exists
+if getent group allowssh >/dev/null; then
+    echo "Group allowssh exists." >> "$output_file"
+else
+    echo "Group allowssh not found." >> "$output_file"
+fi
+end_time
+
+# Alcatraz Scanner
+log_time "Alcatraz Scanner"
+append_title "Alcatraz Scanner"
+echo "Running Alcatraz scan..." >> "$output_file"
+if [ -f /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl ]; then
+    /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl -i default > /tmp/alcatraz_report.txt
+    findings=$(grep -i finding /tmp/alcatraz_report.txt)
+    if [ -n "$findings" ]; then
+        echo "Findings in Alcatraz scan:" >> "$output_file"
+        echo "$findings" >> "$output_file"
+    else
+        echo "No findings in Alcatraz scan." >> "$output_file"
+    fi
+else
+    echo "Alcatraz scanner not found." >> "$output_file"
+fi
+end_time
+
+# SOXDB Scanner
+log_time "SOXDB Scanner"
+append_title "SOXDB Scanner"
+echo "Checking atosadm user management configuration..." >> "$output_file"
+if id "atosadm" >/dev/null 2>&1; then
+    grep atosadm /etc/passwd >> "$output_file" 2>&1
+    admin_group=$(check_admin_group)
+    if [ -n "$admin_group" ]; then
+        grep "$admin_group" /etc/group >> "$output_file" 2>&1 || echo "Group $admin_group not found." >> "$output_file"
+    else
+        echo "No admin group (wheel or sudo) found." >> "$output_file"
+    fi
+    if command_exists chage; then
+        chage -l atosadm >> "$output_file" 2>&1 || echo "Failed to get password aging information for atosadm." >> "$output_file"
+    else
+        echo "chage command not found." >> "$output_file"
+    fi
+else
+    echo "User atosadm not found." >> "$output_file"
+fi
+end_time
+
+# End of report
+echo "----------------------------------------" >> "$output_file"
+echo "Verification Complete. Report saved to $output_file" >> "$output_file"
+
+# Output the location of the report
+echo "Report generated and saved to $output_file"
 
 # At the end of the script, trigger the validator script
 echo "Running os-report-validator.sh..."

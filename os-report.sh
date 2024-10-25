@@ -137,7 +137,7 @@ check_firewall_status() {
         SuSEfirewall2 status >> "$output_file" 2>&1
     else
         echo "No supported firewall management tool found." >> "$output_file"
-    }
+    fi
 }
 
 # Function to check NTP configuration

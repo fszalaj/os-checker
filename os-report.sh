@@ -137,7 +137,7 @@ check_firewall_status() {
         SuSEfirewall2 status >> "$output_file" 2>&1
     else
         echo "No supported firewall management tool found." >> "$output_file"
-    fi
+    }
 }
 
 # Function to check NTP configuration
@@ -153,13 +153,43 @@ check_ntp_status() {
 
     echo "NTP Configuration File: $ntp_config_file" >> "$output_file"
 
-    # Allowed NTP servers
-    allowed_ntp_servers=(
-        "adminserver1-emea.saacon"
-        "adminserver2-emea.saacon"
-        "adminserver3-emea.saacon"
-        "adminserver4-emea.saacon"
-    )
+    # Get the server's primary IP address
+    ip_addresses=$(hostname -I)
+    primary_ip=$(echo $ip_addresses | awk '{print $1}')
+
+    # Determine the network zone
+    if [[ $primary_ip == 155.45.* || $primary_ip == 10.* ]]; then
+        network_zone="SAACON/STZ"
+    elif [[ $primary_ip == 161.* || $primary_ip == 172.* ]]; then
+        network_zone="AOSN"
+    else
+        network_zone="Unknown"
+    fi
+
+    echo "Detected Network Zone: $network_zone" >> "$output_file"
+
+    # Define allowed NTP servers based on network zone
+    if [[ $network_zone == "SAACON/STZ" ]]; then
+        allowed_ntp_servers=(
+            "155.45.163.127"
+            "155.45.163.128"
+            "155.45.163.129"
+            "155.45.163.130"
+            "155.45.129.18"
+            "155.45.129.19"
+            "155.45.224.20"
+            "155.45.224.21"
+        )
+    elif [[ $network_zone == "AOSN" ]]; then
+        allowed_ntp_servers=(
+            "161.89.57.5"
+            "161.89.145.75"
+            "161.89.224.5"
+        )
+    else
+        echo "Unable to determine allowed NTP servers for network zone: $network_zone" >> "$output_file"
+        return
+    fi
 
     # Check configured NTP servers
     configured_servers=$(grep -E '^(server|pool)' "$ntp_config_file" | awk '{print $2}')

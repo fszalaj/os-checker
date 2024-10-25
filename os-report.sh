@@ -151,20 +151,48 @@ check_ntp_status() {
         return
     fi
 
-    default_ntp_servers=$(grep -E '^(server|pool) .*ntp.org' "$ntp_config_file")
-    if [ -n "$default_ntp_servers" ]; then
-        echo "Default NTP servers found in $ntp_config_file. Please remove them." >> "$output_file"
-        echo "$default_ntp_servers" >> "$output_file"
+    echo "NTP Configuration File: $ntp_config_file" >> "$output_file"
+
+    # Allowed NTP servers
+    allowed_ntp_servers=(
+        "adminserver1-emea.saacon"
+        "adminserver2-emea.saacon"
+        "adminserver3-emea.saacon"
+        "adminserver4-emea.saacon"
+    )
+
+    # Check configured NTP servers
+    configured_servers=$(grep -E '^(server|pool)' "$ntp_config_file" | awk '{print $2}')
+
+    echo "Configured NTP servers:" >> "$output_file"
+    echo "$configured_servers" >> "$output_file"
+
+    invalid_servers_found=false
+    for server in $configured_servers; do
+        if ! [[ " ${allowed_ntp_servers[@]} " =~ " ${server} " ]]; then
+            echo "Invalid NTP server found: $server" >> "$output_file"
+            invalid_servers_found=true
+        fi
+    done
+
+    if [ "$invalid_servers_found" = true ]; then
+        echo "Please ensure only the following NTP servers are configured:" >> "$output_file"
+        printf '%s\n' "${allowed_ntp_servers[@]}" >> "$output_file"
     else
-        echo "No default NTP servers found in $ntp_config_file." >> "$output_file"
+        echo "All configured NTP servers are valid." >> "$output_file"
     fi
 
-    atos_ntp_servers=$(grep -E '^server (155\.45|161\.89)' "$ntp_config_file" | awk '{print $2}')
-    if [ -n "$atos_ntp_servers" ]; then
-        echo "ATOS NTP servers configured:" >> "$output_file"
-        echo "$atos_ntp_servers" >> "$output_file"
-    else
-        echo "ATOS NTP servers are not configured in $ntp_config_file." >> "$output_file"
+    # Check if any allowed NTP servers are missing
+    missing_servers=()
+    for allowed_server in "${allowed_ntp_servers[@]}"; do
+        if ! grep -q "$allowed_server" <<< "$configured_servers"; then
+            missing_servers+=("$allowed_server")
+        fi
+    done
+
+    if [ ${#missing_servers[@]} -ne 0 ]; then
+        echo "The following allowed NTP servers are missing from the configuration:" >> "$output_file"
+        printf '%s\n' "${missing_servers[@]}" >> "$output_file"
     fi
 
     echo "Checking NTP synchronization status..." >> "$output_file"
@@ -286,11 +314,7 @@ fi
 
 if [ -n "$current_timezone" ]; then
     echo "Current Timezone: $current_timezone" >> "$output_file"
-    if [ "$current_timezone" = "UTC" ]; then
-        echo "Timezone is set to UTC. Please set it to the correct timezone." >> "$output_file"
-    else
-        echo "Timezone is set to $current_timezone." >> "$output_file"
-    fi
+    echo "Timezone is set to $current_timezone." >> "$output_file"
 else
     echo "Current Timezone: Unknown" >> "$output_file"
 fi

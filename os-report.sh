@@ -10,7 +10,7 @@ mkdir -p /opt/atosans/os-checker
 detect_os() {
     if [ -f /etc/os-release ]; then
         . /etc/os-release
-        echo "$NAME|$VERSION_ID"
+        echo "$ID|$VERSION_ID"
     else
         os_name=$(uname -s)
         os_version=$(uname -r)
@@ -71,20 +71,35 @@ command_exists() {
 install_utilities() {
     log_time "Utilities Installation"
     append_title "Utilities Installation"
+    
+    os_info=$(detect_os)
+    OS_NAME=$(echo "$os_info" | cut -d'|' -f1)
+    OS_VERSION=$(echo "$os_info" | cut -d'|' -f2)
+    
     declare -a utilities=("nc" "curl" "telnet" "htop")
+    
+    # Install utilities based on OS and package manager
     for util in "${utilities[@]}"; do
         if ! command_exists "$util"; then
             echo "$util is not installed. Installing..." >> "$output_file"
-            if command_exists apt-get; then
-                apt-get update >> "$output_file" 2>&1
-                apt-get install -y "$util" >> "$output_file" 2>&1
-            elif command_exists yum; then
-                yum install -y "$util" >> "$output_file" 2>&1
-            elif command_exists zypper; then
-                zypper install -y "$util" >> "$output_file" 2>&1
-            else
-                echo "No suitable package manager found to install $util." >> "$output_file"
-            fi
+            
+            case "$OS_NAME" in
+                "ubuntu" | "debian")
+                    apt-get update >> "$output_file" 2>&1
+                    apt-get install -y "$util" >> "$output_file" 2>&1
+                    ;;
+                "centos" | "rhel" | "fedora")
+                    yum install -y "$util" >> "$output_file" 2>&1
+                    ;;
+                "sles" | "opensuse-leap")
+                    zypper install -y "$util" >> "$output_file" 2>&1
+                    ;;
+                *)
+                    echo "Unsupported OS: $OS_NAME. Cannot install $util." >> "$output_file"
+                    ;;
+            esac
+
+            # Verify installation success
             if command_exists "$util"; then
                 echo "$util installed successfully." >> "$output_file"
             else
@@ -142,12 +157,13 @@ check_firewall_status() {
 
 # Function to check NTP configuration
 check_ntp_status() {
+    # We use chrony everywhere
     if [ -f /etc/chrony.conf ]; then
         ntp_config_file="/etc/chrony.conf"
-    elif [ -f /etc/ntp.conf ]; then
-        ntp_config_file="/etc/ntp.conf"
+    elif [ -f /etc/chrony/chrony.conf ]; then
+        ntp_config_file="/etc/chrony/chrony.conf"
     else
-        echo "No NTP configuration file found." >> "$output_file"
+        echo "No chrony configuration file found." >> "$output_file"
         return
     fi
 
@@ -228,10 +244,8 @@ check_ntp_status() {
     echo "Checking NTP synchronization status..." >> "$output_file"
     if command_exists chronyc; then
         chronyc sources >> "$output_file" 2>&1
-    elif command_exists ntpq; then
-        ntpq -p >> "$output_file" 2>&1
     else
-        echo "Neither chronyc nor ntpq commands are available." >> "$output_file"
+        echo "chronyc command is not available." >> "$output_file"
     fi
 }
 
@@ -319,15 +333,23 @@ else
 fi
 
 echo "Checking connectivity to AISAAC / MDR / Paladion gateway..." >> "$output_file"
-paladion_ip="155.45.244.104"
-for port in 443 8443; do
-    echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
-    if command_exists nc; then
-        timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to $paladion_ip:$port successful." >> "$output_file" || echo "Connection to $paladion_ip:$port failed or timed out." >> "$output_file"
+if [ -f /etc/Paladion/AiSaacServer.conf ]; then
+    paladion_ip=$(grep Address /etc/Paladion/AiSaacServer.conf | sed -n 's/.*<Address>\(.*\)<\/Address>.*/\1/p')
+    if [ -z "$paladion_ip" ]; then
+        echo "Paladion IP not found in AiSaacServer.conf." >> "$output_file"
     else
-        echo "nc command not found." >> "$output_file"
+        for port in 443 8443; do
+            echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
+            if command_exists nc; then
+                timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to $paladion_ip:$port successful." >> "$output_file" || echo "Connection to $paladion_ip:$port failed or timed out." >> "$output_file"
+            else
+                echo "nc command not found." >> "$output_file"
+            fi
+        done
     fi
-done
+else
+    echo "/etc/Paladion/AiSaacServer.conf not found. Skipping Paladion gateway connectivity check." >> "$output_file"
+fi
 end_time
 
 # Timezone Configuration
@@ -368,19 +390,24 @@ end_time
 log_time "Sudoers Configuration"
 append_title "Sudoers Configuration"
 echo "Checking sudoers configuration..." >> "$output_file"
-sudoers_files=("/etc/sudoers" "/etc/sudoers.d/*")
-found_nopasswd=false
-for file in "${sudoers_files[@]}"; do
-    if [ -f "$file" ]; then
-        if grep -Eq '^(%wheel|%sudo)\s+ALL=\(ALL\)\s+NOPASSWD:\s+ALL' "$file"; then
-            echo "NOPASSWD for wheel or sudo group found in $file" >> "$output_file"
-            found_nopasswd=true
+users_to_check=("atosans" "atosadm")
+sudoers_dir="/etc/sudoers.d"
+found_nopasswd=true
+
+for user in "${users_to_check[@]}"; do
+    sudoers_file="$sudoers_dir/$user"
+    if [ -f "$sudoers_file" ]; then
+        if grep -Eq "^$user\s+ALL=\(ALL\)\s+NOPASSWD:\s+ALL" "$sudoers_file"; then
+            echo "NOPASSWD entry for $user found in $sudoers_file" >> "$output_file"
+        else
+            echo "NOPASSWD entry for $user not found in $sudoers_file. Please configure it." >> "$output_file"
+            found_nopasswd=false
         fi
+    else
+        echo "Sudoers file $sudoers_file not found. Please create it with NOPASSWD entry for $user." >> "$output_file"
+        found_nopasswd=false
     fi
 done
-if [ "$found_nopasswd" = false ]; then
-    echo "NOPASSWD for wheel or sudo group not found in sudoers files. Please configure it." >> "$output_file"
-fi
 end_time
 
 # CrowdStrike (AV/EDR)
@@ -418,17 +445,23 @@ append_title "AISAAC Agent (MDR)"
 echo "Checking AISAAC agent status..." >> "$output_file"
 check_service_status "proddefthmdr"
 
-echo "Checking connectivity to Paladion gateway..." >> "$output_file"
-if command_exists nc; then
+if [ -f /etc/Paladion/AiSaacServer.conf ]; then
+    echo "Checking connectivity to Paladion gateway..." >> "$output_file"
     paladion_ip=$(grep Address /etc/Paladion/AiSaacServer.conf | sed -n 's/.*<Address>\(.*\)<\/Address>.*/\1/p')
     if [ -z "$paladion_ip" ]; then
-        paladion_ip="161.89.16.217" # Default value if not found
+        echo "Paladion IP not found in AiSaacServer.conf." >> "$output_file"
+    else
+        for port in 443 8443; do
+            echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
+            if command_exists nc; then
+                timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to Paladion gateway on port $port successful." >> "$output_file" || echo "Connection to Paladion gateway on port $port failed or timed out." >> "$output_file"
+            else
+                echo "nc command not found." >> "$output_file"
+            fi
+        done
     fi
-    for port in 443 8443; do
-        timeout 10 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to Paladion gateway on port $port successful." >> "$output_file" || echo "Connection to Paladion gateway on port $port failed or timed out." >> "$output_file"
-    done
 else
-    echo "nc command not found." >> "$output_file"
+    echo "/etc/Paladion/AiSaacServer.conf not found. Skipping Paladion gateway connectivity check." >> "$output_file"
 fi
 end_time
 
@@ -552,13 +585,13 @@ log_time "Alcatraz Scanner"
 append_title "Alcatraz Scanner"
 echo "Running Alcatraz scan..." >> "$output_file"
 if [ -f /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl ]; then
-    /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl -i default > /tmp/alcatraz_report.txt
-    findings=$(grep -i finding /tmp/alcatraz_report.txt)
+    /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl -i default > /tmp/alcatraz_report.txt 2>&1
+    findings=$(grep -i 'finding\|error\|failed' /tmp/alcatraz_report.txt)
     if [ -n "$findings" ]; then
-        echo "Findings in Alcatraz scan:" >> "$output_file"
+        echo "Errors found during Alcatraz scan:" >> "$output_file"
         echo "$findings" >> "$output_file"
     else
-        echo "No findings in Alcatraz scan." >> "$output_file"
+        echo "No errors found in Alcatraz scan." >> "$output_file"
     fi
 else
     echo "Alcatraz scanner not found." >> "$output_file"

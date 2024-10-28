@@ -174,8 +174,8 @@ check_ntp_status() {
     primary_ip=$(echo $ip_addresses | awk '{print $1}')
 
     # Determine the network zone
-    if [[ $primary_ip == 155.45.* || $primary_ip == 10.* || $primary_ip == 129.185.* || $primary_ip == 172.28.56.*]]; then
-        network_zone="SAACON/ESN/STZ/ETZ/TEST"
+    if [[ $primary_ip == 155.45.* || $primary_ip == 10.* || $primary_ip == 129.185.* ]]; then
+        network_zone="SAACON/ESN/STZ/ETZ"
     elif [[ $primary_ip == 161.* || $primary_ip == 172.* ]]; then
         network_zone="AOSN"
     else
@@ -185,7 +185,7 @@ check_ntp_status() {
     echo "Detected Network Zone: $network_zone" >> "$output_file"
 
     # Define allowed NTP servers based on network zone
-    if [[ $network_zone == "SAACON/ESN/STZ/ETZ/TEST" ]]; then
+    if [[ $network_zone == "SAACON/ESN/STZ/ETZ" ]]; then
         allowed_ntp_servers=(
             "155.45.163.127"
             "155.45.163.128"

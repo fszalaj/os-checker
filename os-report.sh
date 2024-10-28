@@ -307,16 +307,15 @@ end_time
 log_time "Connectivity Checks"
 append_title "Connectivity Checks"
 echo "Checking connectivity to Nagios gateways..." >> "$output_file"
-declare -A nagios_servers=(
-    ["161.89.176.188"]="Nagios Server 1"
-    ["161.89.164.82"]="Nagios Server 2"
-    ["155.45.163.181"]="Nagios Backup Server"
-    ["161.89.112.32"]="Nagios Server 3"
-)
-for server_ip in "${!nagios_servers[@]}"; do
-    echo "Testing connection to ${nagios_servers[$server_ip]} ($server_ip:443)..." >> "$output_file"
+nagios_ips=("161.89.176.188" "161.89.164.82" "155.45.163.181" "161.89.112.32")
+nagios_names=("Nagios Server 1" "Nagios Server 2" "Nagios Backup Server" "Nagios Server 3")
+
+for index in "${!nagios_ips[@]}"; do
+    server_ip="${nagios_ips[$index]}"
+    server_name="${nagios_names[$index]}"
+    echo "Testing connection to $server_name ($server_ip:443)..." >> "$output_file"
     if command_exists nc; then
-        timeout 5 nc -zv "$server_ip" 443 >> "$output_file" 2>&1 && echo "Connection to ${nagios_servers[$server_ip]} ($server_ip:443) successful." >> "$output_file" || echo "Connection to ${nagios_servers[$server_ip]} ($server_ip:443) failed or timed out." >> "$output_file"
+        timeout 5 nc -zv "$server_ip" 443 >> "$output_file" 2>&1 && echo "Connection to $server_name ($server_ip:443) successful." >> "$output_file" || echo "Connection to $server_name ($server_ip:443) failed or timed out." >> "$output_file"
     else
         echo "nc command not found." >> "$output_file"
     fi
@@ -405,7 +404,7 @@ found_nopasswd=true
 for user in "${users_to_check[@]}"; do
     sudoers_file="$sudoers_dir/$user"
     if [ -f "$sudoers_file" ]; then
-        if grep -Eq "^(%?$user)\s+ALL=\(ALL\)\s+NOPASSWD:\s+ALL" "$sudoers_file"; then
+        if grep -Eq "^(%?$user)\s+ALL=(\(ALL\)|)\s*NOPASSWD:\s*ALL" "$sudoers_file"; then
             echo "NOPASSWD entry for $user found in $sudoers_file" >> "$output_file"
         else
             echo "NOPASSWD entry for $user not found in $sudoers_file. Please configure it." >> "$output_file"
@@ -505,6 +504,10 @@ if command_exists nc; then
     done
 else
     echo "nc command not found." >> "$output_file"
+fi
+
+if [ "$successful_connections" -eq 0 ]; then
+    echo "All Nagios connections failed." >> "$output_file"
 fi
 
 echo "Checking Nagios NaCl cron job for 'nagios' user..." >> "$output_file"

@@ -304,11 +304,16 @@ end_time
 log_time "Connectivity Checks"
 append_title "Connectivity Checks"
 echo "Checking connectivity to Nagios gateways..." >> "$output_file"
-nagios_servers=("161.89.176.188" "161.89.164.82" "155.45.163.181" "161.89.112.32")
-for server in "${nagios_servers[@]}"; do
-    echo "Testing connection to $server:443..." >> "$output_file"
+declare -A nagios_servers=(
+    ["161.89.176.188"]="Nagios Server 1"
+    ["161.89.164.82"]="Nagios Server 2"
+    ["155.45.163.181"]="Nagios Backup Server"
+    ["161.89.112.32"]="Nagios Server 3"
+)
+for server_ip in "${!nagios_servers[@]}"; do
+    echo "Testing connection to ${nagios_servers[$server_ip]} ($server_ip:443)..." >> "$output_file"
     if command_exists nc; then
-        timeout 5 nc -zv "$server" 443 >> "$output_file" 2>&1 && echo "Connection to $server:443 successful." >> "$output_file" || echo "Connection to $server:443 failed or timed out." >> "$output_file"
+        timeout 5 nc -zv "$server_ip" 443 >> "$output_file" 2>&1 && echo "Connection to ${nagios_servers[$server_ip]} ($server_ip:443) successful." >> "$output_file" || echo "Connection to ${nagios_servers[$server_ip]} ($server_ip:443) failed or timed out." >> "$output_file"
     else
         echo "nc command not found." >> "$output_file"
     fi
@@ -316,18 +321,18 @@ done
 
 echo "Checking connectivity to CrowdStrike proxy..." >> "$output_file"
 crowdstrike_proxy="161.89.57.59"
-echo "Testing connection to $crowdstrike_proxy:8080..." >> "$output_file"
+echo "Testing connection to CrowdStrike Proxy ($crowdstrike_proxy:8080)..." >> "$output_file"
 if command_exists nc; then
-    timeout 5 nc -zv "$crowdstrike_proxy" 8080 >> "$output_file" 2>&1 && echo "Connection to $crowdstrike_proxy:8080 successful." >> "$output_file" || echo "Connection to $crowdstrike_proxy:8080 failed or timed out." >> "$output_file"
+    timeout 5 nc -zv "$crowdstrike_proxy" 8080 >> "$output_file" 2>&1 && echo "Connection to CrowdStrike Proxy ($crowdstrike_proxy:8080) successful." >> "$output_file" || echo "Connection to CrowdStrike Proxy ($crowdstrike_proxy:8080) failed or timed out." >> "$output_file"
 else
     echo "nc command not found." >> "$output_file"
 fi
 
 echo "Checking connectivity to RPM Package repository..." >> "$output_file"
 rpm_repo="155.45.172.37"
-echo "Testing connection to $rpm_repo:443..." >> "$output_file"
+echo "Testing connection to RPM Package Repository ($rpm_repo:443)..." >> "$output_file"
 if command_exists nc; then
-    timeout 5 nc -zv "$rpm_repo" 443 >> "$output_file" 2>&1 && echo "Connection to $rpm_repo:443 successful." >> "$output_file" || echo "Connection to $rpm_repo:443 failed or timed out." >> "$output_file"
+    timeout 5 nc -zv "$rpm_repo" 443 >> "$output_file" 2>&1 && echo "Connection to RPM Package Repository ($rpm_repo:443) successful." >> "$output_file" || echo "Connection to RPM Package Repository ($rpm_repo:443) failed or timed out." >> "$output_file"
 else
     echo "nc command not found." >> "$output_file"
 fi
@@ -339,9 +344,9 @@ if [ -f /etc/Paladion/AiSaacServer.conf ]; then
         echo "Paladion IP not found in AiSaacServer.conf." >> "$output_file"
     else
         for port in 443 8443; do
-            echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
+            echo "Testing connection to Paladion Gateway ($paladion_ip:$port)..." >> "$output_file"
             if command_exists nc; then
-                timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to $paladion_ip:$port successful." >> "$output_file" || echo "Connection to $paladion_ip:$port failed or timed out." >> "$output_file"
+                timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to Paladion Gateway ($paladion_ip:$port) successful." >> "$output_file" || echo "Connection to Paladion Gateway ($paladion_ip:$port) failed or timed out." >> "$output_file"
             else
                 echo "nc command not found." >> "$output_file"
             fi
@@ -397,7 +402,7 @@ found_nopasswd=true
 for user in "${users_to_check[@]}"; do
     sudoers_file="$sudoers_dir/$user"
     if [ -f "$sudoers_file" ]; then
-        if grep -Eq "^$user\s+ALL=\(ALL\)\s+NOPASSWD:\s+ALL" "$sudoers_file"; then
+        if grep -Eq "^(%?$user)\s+ALL=\(ALL\)\s+NOPASSWD:\s+ALL" "$sudoers_file"; then
             echo "NOPASSWD entry for $user found in $sudoers_file" >> "$output_file"
         else
             echo "NOPASSWD entry for $user not found in $sudoers_file. Please configure it." >> "$output_file"
@@ -452,9 +457,9 @@ if [ -f /etc/Paladion/AiSaacServer.conf ]; then
         echo "Paladion IP not found in AiSaacServer.conf." >> "$output_file"
     else
         for port in 443 8443; do
-            echo "Testing connection to $paladion_ip:$port..." >> "$output_file"
+            echo "Testing connection to Paladion Gateway ($paladion_ip:$port)..." >> "$output_file"
             if command_exists nc; then
-                timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to Paladion gateway on port $port successful." >> "$output_file" || echo "Connection to Paladion gateway on port $port failed or timed out." >> "$output_file"
+                timeout 5 nc -zv "$paladion_ip" "$port" >> "$output_file" 2>&1 && echo "Connection to Paladion Gateway ($paladion_ip:$port) successful." >> "$output_file" || echo "Connection to Paladion Gateway ($paladion_ip:$port) failed or timed out." >> "$output_file"
             else
                 echo "nc command not found." >> "$output_file"
             fi
@@ -477,8 +482,10 @@ fi
 
 echo "Checking Nagios connectivity..." >> "$output_file"
 if command_exists nc; then
-    timeout 10 nc -zv 161.89.176.188 443 >> "$output_file" 2>&1 && echo "Connection to Nagios server successful." >> "$output_file" || echo "Connection to Nagios server failed or timed out." >> "$output_file"
-    timeout 10 nc -zv 155.45.163.181 443 >> "$output_file" 2>&1 && echo "Connection to Nagios backup server successful." >> "$output_file" || echo "Connection to Nagios backup server failed or timed out." >> "$output_file"
+    echo "Testing connection to Nagios Server (161.89.176.188:443)..." >> "$output_file"
+    timeout 10 nc -zv 161.89.176.188 443 >> "$output_file" 2>&1 && echo "Connection to Nagios Server successful." >> "$output_file" || echo "Connection to Nagios Server failed or timed out." >> "$output_file"
+    echo "Testing connection to Nagios Backup Server (155.45.163.181:443)..." >> "$output_file"
+    timeout 10 nc -zv 155.45.163.181 443 >> "$output_file" 2>&1 && echo "Connection to Nagios Backup Server successful." >> "$output_file" || echo "Connection to Nagios Backup Server failed or timed out." >> "$output_file"
 else
     echo "nc command not found." >> "$output_file"
 fi
@@ -586,12 +593,14 @@ append_title "Alcatraz Scanner"
 echo "Running Alcatraz scan..." >> "$output_file"
 if [ -f /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl ]; then
     /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl -i default > /tmp/alcatraz_report.txt 2>&1
-    findings=$(grep -i 'finding\|error\|failed' /tmp/alcatraz_report.txt)
-    if [ -n "$findings" ]; then
-        echo "Errors found during Alcatraz scan:" >> "$output_file"
+    errors=$(grep -i '<ERROR>' /tmp/alcatraz_report.txt)
+    findings=$(grep -i '<FINDING>' /tmp/alcatraz_report.txt)
+    if [ -n "$errors" ] || [ -n "$findings" ]; then
+        echo "Errors and Findings during Alcatraz scan:" >> "$output_file"
+        echo "$errors" >> "$output_file"
         echo "$findings" >> "$output_file"
     else
-        echo "No errors found in Alcatraz scan." >> "$output_file"
+        echo "No errors or findings in Alcatraz scan." >> "$output_file"
     fi
 else
     echo "Alcatraz scanner not found." >> "$output_file"

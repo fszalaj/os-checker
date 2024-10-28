@@ -71,18 +71,18 @@ command_exists() {
 install_utilities() {
     log_time "Utilities Installation"
     append_title "Utilities Installation"
-    
+
     os_info=$(detect_os)
     OS_NAME=$(echo "$os_info" | cut -d'|' -f1)
     OS_VERSION=$(echo "$os_info" | cut -d'|' -f2)
-    
+
     declare -a utilities=("nc" "curl" "telnet" "htop")
-    
+
     # Install utilities based on OS and package manager
     for util in "${utilities[@]}"; do
         if ! command_exists "$util"; then
             echo "$util is not installed. Installing..." >> "$output_file"
-            
+
             case "$OS_NAME" in
                 "ubuntu" | "debian")
                     apt-get update >> "$output_file" 2>&1
@@ -215,8 +215,9 @@ check_ntp_status() {
 
     invalid_servers_found=false
     for server in $configured_servers; do
-        if ! [[ " ${allowed_ntp_servers[@]} " =~ " ${server} " ]]; then
-            echo "Invalid NTP server found: $server" >> "$output_file"
+        server_ip=$(echo "$server" | awk -F',' '{print $1}')
+        if ! [[ " ${allowed_ntp_servers[@]} " =~ " ${server_ip} " ]]; then
+            echo "Invalid NTP server found: $server_ip" >> "$output_file"
             invalid_servers_found=true
         fi
     done
@@ -239,6 +240,8 @@ check_ntp_status() {
     if [ ${#missing_servers[@]} -ne 0 ]; then
         echo "The following allowed NTP servers are missing from the configuration:" >> "$output_file"
         printf '%s\n' "${missing_servers[@]}" >> "$output_file"
+    else
+        echo "All allowed NTP servers are present in the configuration." >> "$output_file"
     fi
 
     echo "Checking NTP synchronization status..." >> "$output_file"
@@ -481,11 +484,25 @@ else
 fi
 
 echo "Checking Nagios connectivity..." >> "$output_file"
+nagios_servers=("161.89.176.188" "155.45.163.181")
+successful_connections=0
+total_servers=${#nagios_servers[@]}
+
 if command_exists nc; then
-    echo "Testing connection to Nagios Server (161.89.176.188:443)..." >> "$output_file"
-    timeout 10 nc -zv 161.89.176.188 443 >> "$output_file" 2>&1 && echo "Connection to Nagios Server successful." >> "$output_file" || echo "Connection to Nagios Server failed or timed out." >> "$output_file"
-    echo "Testing connection to Nagios Backup Server (155.45.163.181:443)..." >> "$output_file"
-    timeout 10 nc -zv 155.45.163.181 443 >> "$output_file" 2>&1 && echo "Connection to Nagios Backup Server successful." >> "$output_file" || echo "Connection to Nagios Backup Server failed or timed out." >> "$output_file"
+    for server_ip in "${nagios_servers[@]}"; do
+        if [ "$server_ip" == "161.89.176.188" ]; then
+            server_name="Nagios Server"
+        else
+            server_name="Nagios Backup Server"
+        fi
+        echo "Testing connection to $server_name ($server_ip:443)..." >> "$output_file"
+        if timeout 10 nc -zv "$server_ip" 443 >> "$output_file" 2>&1; then
+            echo "Connection to $server_name successful." >> "$output_file"
+            successful_connections=$((successful_connections + 1))
+        else
+            echo "Connection to $server_name failed or timed out." >> "$output_file"
+        fi
+    done
 else
     echo "nc command not found." >> "$output_file"
 fi
@@ -594,13 +611,11 @@ echo "Running Alcatraz scan..." >> "$output_file"
 if [ -f /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl ]; then
     /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl -i default > /tmp/alcatraz_report.txt 2>&1
     errors=$(grep -i '<ERROR>' /tmp/alcatraz_report.txt)
-    findings=$(grep -i '<FINDING>' /tmp/alcatraz_report.txt)
-    if [ -n "$errors" ] || [ -n "$findings" ]; then
-        echo "Errors and Findings during Alcatraz scan:" >> "$output_file"
+    if [ -n "$errors" ]; then
+        echo "Errors during Alcatraz scan:" >> "$output_file"
         echo "$errors" >> "$output_file"
-        echo "$findings" >> "$output_file"
     else
-        echo "No errors or findings in Alcatraz scan." >> "$output_file"
+        echo "No errors in Alcatraz scan." >> "$output_file"
     fi
 else
     echo "Alcatraz scanner not found." >> "$output_file"

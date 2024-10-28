@@ -70,7 +70,7 @@ echo "----------------------------------------"
 sections=(
     "Filesystems Check|df command not found"
     "Network Interfaces and IPs|Neither ip nor ifconfig commands are available"
-    "Connectivity Checks|Connection to .* failed|Connection to .* timed out|failed|error|timed out|nc command not found"
+    "Connectivity Checks|All Nagios connections failed|Connection to .* failed|Connection to .* timed out|failed|error|timed out|nc command not found"
     "Timezone Configuration|Unable to determine the current timezone"
     "NTP Configuration|Invalid NTP server found|No chrony configuration file found|chronyc command is not available|Unable to determine allowed NTP servers for network zone"
     "Firewall Configuration|failed|error|not found|ERROR|firewalld is not enabled|No supported firewall management tool found"
@@ -80,7 +80,7 @@ sections=(
     "Nagios CMF Agents|All Nagios connections failed|Nagios NaCl cron job not found in nagios user's crontab|ASE agent not found"
     "RSCD \\(TSSA Agent\\)|RSCD service not found|RSCD is not listening on port 4750|Proper entry not found in /etc/rsc/users.local|Proper entry not found in /etc/rsc/exports|failed|error|not found"
     "CyberArk Accounts|User atosans not found|User atosadm not found|User .+ is not in group allowssh|User .+ is not in group wheel or sudo|Group allowssh not found"
-    "Alcatraz Scanner|Errors during Alcatraz scan:|<ERROR>|error|failed"
+    "Alcatraz Scanner|Errors during Alcatraz scan:\n.*<ERROR>"
     "SOXDB Scanner|failed|error|not found|User atosadm not found|Group wheel or sudo not found|Failed to get password aging information"
 )
 

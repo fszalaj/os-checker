@@ -54,9 +54,9 @@ check_section() {
         failed_checks=$((failed_checks + 1))
         echo "[FAIL] $section_name"
         echo "  Errors found:"
-        echo "$matches" | while read -r line; do
+        while read -r line; do
             echo "    $line"
-        done
+        done <<< "$matches"
     elif [ "$section_status" = "SKIPPED" ]; then
         skipped_checks=$((skipped_checks + 1))
         echo "[SKIPPED] $section_name"
@@ -72,15 +72,15 @@ sections=(
     "Network Interfaces and IPs|Neither ip nor ifconfig commands are available"
     "Connectivity Checks|Connection to .* failed|Connection to .* timed out|failed|error|timed out|nc command not found"
     "Timezone Configuration|Unable to determine the current timezone"
-    "NTP Configuration|Invalid NTP server found|No chrony configuration file found|chronyc command is not available|The following allowed NTP servers are missing|Unable to determine allowed NTP servers for network zone"
+    "NTP Configuration|Invalid NTP server found|No chrony configuration file found|chronyc command is not available|Unable to determine allowed NTP servers for network zone"
     "Firewall Configuration|failed|error|not found|ERROR|firewalld is not enabled|No supported firewall management tool found"
     "Sudoers Configuration|NOPASSWD entry for .* not found|Sudoers file .* not found"
     "CrowdStrike \\(AV/EDR\\)|falcon-sensor service not found|Failed to connect to CrowdStrike proxy|failed|error|not found"
-    "AISAAC Agent \\(MDR\\)|proddefthmdr service not found|proddefthmdr is not enabled|Connection to Paladion gateway on port .* failed or timed out|failed|error|timed out|/etc/Paladion/AiSaacServer.conf not found"
-    "Nagios CMF Agents|Nagios NaCl cron job not found in nagios user's crontab|Connection to Nagios server failed|Connection to Nagios backup server failed|ASE agent not found"
+    "AISAAC Agent \\(MDR\\)|proddefthmdr service not found|proddefthmdr is not enabled|Connection to Paladion Gateway .* failed or timed out|failed|error|timed out|/etc/Paladion/AiSaacServer.conf not found"
+    "Nagios CMF Agents|All Nagios connections failed|Nagios NaCl cron job not found in nagios user's crontab|ASE agent not found"
     "RSCD \\(TSSA Agent\\)|RSCD service not found|RSCD is not listening on port 4750|Proper entry not found in /etc/rsc/users.local|Proper entry not found in /etc/rsc/exports|failed|error|not found"
     "CyberArk Accounts|User atosans not found|User atosadm not found|User .+ is not in group allowssh|User .+ is not in group wheel or sudo|Group allowssh not found"
-    "Alcatraz Scanner|<ERROR>|error|failed"
+    "Alcatraz Scanner|Errors during Alcatraz scan:|<ERROR>|error|failed"
     "SOXDB Scanner|failed|error|not found|User atosadm not found|Group wheel or sudo not found|Failed to get password aging information"
 )
 

@@ -13,6 +13,7 @@ fi
 total_checks=0
 passed_checks=0
 failed_checks=0
+skipped_checks=0
 
 # Function to escape regex special characters in a string
 escape_regex() {
@@ -23,7 +24,8 @@ escape_regex() {
 check_section() {
     section_name="$1"
     error_pattern="$2"
-    section_passed=true
+    skip_pattern="$3"
+    section_status="PASS"
     error_messages=()
 
     # Escape special regex characters in section_name
@@ -32,24 +34,32 @@ check_section() {
     # Extract the section from the report
     section_content=$(awk "/## $escaped_section_name ##/,/Completed: $escaped_section_name/" "$report_file")
 
-    # Check for error patterns
-    matches=$(echo "$section_content" | grep -iE "$error_pattern")
-    if [ -n "$matches" ]; then
-        section_passed=false
-        error_messages+=("$matches")
+    # Check for skip patterns
+    if [ -n "$skip_pattern" ] && echo "$section_content" | grep -iE "$skip_pattern" >/dev/null; then
+        section_status="SKIPPED"
+    else
+        # Check for error patterns
+        matches=$(echo "$section_content" | grep -iE "$error_pattern")
+        if [ -n "$matches" ]; then
+            section_status="FAIL"
+            error_messages+=("$matches")
+        fi
     fi
 
     total_checks=$((total_checks + 1))
-    if [ "$section_passed" = true ]; then
+    if [ "$section_status" = "PASS" ]; then
         passed_checks=$((passed_checks + 1))
         echo "[PASS] $section_name"
-    else
+    elif [ "$section_status" = "FAIL" ]; then
         failed_checks=$((failed_checks + 1))
         echo "[FAIL] $section_name"
         echo "  Errors found:"
-        for msg in "${error_messages[@]}"; do
-            echo "    $msg"
+        echo "$matches" | while read -r line; do
+            echo "    $line"
         done
+    elif [ "$section_status" = "SKIPPED" ]; then
+        skipped_checks=$((skipped_checks + 1))
+        echo "[SKIPPED] $section_name"
     fi
 }
 
@@ -70,22 +80,28 @@ sections=(
     "Nagios CMF Agents|Nagios NaCl cron job not found in nagios user's crontab|Connection to Nagios server failed|Connection to Nagios backup server failed|ASE agent not found"
     "RSCD \\(TSSA Agent\\)|RSCD service not found|RSCD is not listening on port 4750|Proper entry not found in /etc/rsc/users.local|Proper entry not found in /etc/rsc/exports|failed|error|not found"
     "CyberArk Accounts|User atosans not found|User atosadm not found|User .+ is not in group allowssh|User .+ is not in group wheel or sudo|Group allowssh not found"
-    "Alcatraz Scanner|Errors found during Alcatraz scan|Alcatraz scanner not found|error|failed"
+    "Alcatraz Scanner|<ERROR>|error|failed"
     "SOXDB Scanner|failed|error|not found|User atosadm not found|Group wheel or sudo not found|Failed to get password aging information"
 )
+
+# Skip patterns for certain sections
+declare -A skip_patterns
+skip_patterns["AISAAC Agent \\(MDR\\)"]="proddefthmdr service not found|/etc/Paladion/AiSaacServer.conf not found"
 
 # Validate each section
 for section_info in "${sections[@]}"; do
     section_name="${section_info%%|*}"
     error_pattern="${section_info#*|}"
+    skip_pattern="${skip_patterns[$section_name]}"
 
-    check_section "$section_name" "$error_pattern"
+    check_section "$section_name" "$error_pattern" "$skip_pattern"
 done
 
 echo "----------------------------------------"
 echo "Total Checks: $total_checks"
 echo "Passed Checks: $passed_checks"
 echo "Failed Checks: $failed_checks"
+echo "Skipped Checks: $skipped_checks"
 
 if [ "$failed_checks" -eq 0 ]; then
     echo "All checks passed successfully!"

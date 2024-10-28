@@ -76,7 +76,7 @@ install_utilities() {
     OS_NAME=$(echo "$os_info" | cut -d'|' -f1)
     OS_VERSION=$(echo "$os_info" | cut -d'|' -f2)
 
-    declare -a utilities=("nc" "curl" "telnet" "htop")
+    declare -a utilities=("nc" "curl" "telnet" "htop" "nano")
 
     # Install utilities based on OS and package manager
     for util in "${utilities[@]}"; do
@@ -396,23 +396,17 @@ end_time
 # Sudoers Configuration
 log_time "Sudoers Configuration"
 append_title "Sudoers Configuration"
-echo "Checking sudoers configuration..." >> "$output_file"
-users_to_check=("atosans" "atosadm")
-sudoers_dir="/etc/sudoers.d"
-found_nopasswd=true
-
-for user in "${users_to_check[@]}"; do
-    sudoers_file="$sudoers_dir/$user"
+users=("atosans" "atosadm")
+for user in "${users[@]}"; do
+    sudoers_file="/etc/sudoers.d/$user"
     if [ -f "$sudoers_file" ]; then
-        if grep -Eq "^(%?$user)\s+ALL=(\(ALL\)|)\s*NOPASSWD:\s*ALL" "$sudoers_file"; then
+        if grep -Eq "NOPASSWD" "$sudoers_file"; then
             echo "NOPASSWD entry for $user found in $sudoers_file" >> "$output_file"
         else
             echo "NOPASSWD entry for $user not found in $sudoers_file. Please configure it." >> "$output_file"
-            found_nopasswd=false
         fi
     else
         echo "Sudoers file $sudoers_file not found. Please create it with NOPASSWD entry for $user." >> "$output_file"
-        found_nopasswd=false
     fi
 done
 end_time

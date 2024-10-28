@@ -613,12 +613,12 @@ append_title "Alcatraz Scanner"
 echo "Running Alcatraz scan..." >> "$output_file"
 if [ -f /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl ]; then
     /opt/atos_tooling/alcatraz_scanner/Alcatraz/os/bin/lsecurity.pl -i default > /tmp/alcatraz_report.txt 2>&1
-    errors=$(grep -i '<ERROR>' /tmp/alcatraz_report.txt)
-    if [ -n "$errors" ]; then
-        echo "Errors during Alcatraz scan:" >> "$output_file"
-        echo "$errors" >> "$output_file"
+    findings_and_errors=$(grep -E '<ERROR>|<FINDING>' /tmp/alcatraz_report.txt)
+    if [ -n "$findings_and_errors" ]; then
+        echo "Errors and Findings during Alcatraz scan:" >> "$output_file"
+        echo "$findings_and_errors" >> "$output_file"
     else
-        echo "No errors in Alcatraz scan." >> "$output_file"
+        echo "No errors or findings in Alcatraz scan." >> "$output_file"
     fi
 else
     echo "Alcatraz scanner not found." >> "$output_file"

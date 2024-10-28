@@ -80,7 +80,7 @@ sections=(
     "Nagios CMF Agents|All Nagios connections failed|Nagios NaCl cron job not found in nagios user's crontab|ASE agent not found"
     "RSCD \\(TSSA Agent\\)|RSCD service not found|RSCD is not listening on port 4750|Proper entry not found in /etc/rsc/users.local|Proper entry not found in /etc/rsc/exports|failed|error|not found"
     "CyberArk Accounts|User atosans not found|User atosadm not found|User .+ is not in group allowssh|User .+ is not in group wheel or sudo|Group allowssh not found"
-    "Alcatraz Scanner|Errors during Alcatraz scan:\n.*<ERROR>"
+    "Alcatraz Scanner|Errors and Findings during Alcatraz scan:\n.*<ERROR>"
     "SOXDB Scanner|failed|error|not found|User atosadm not found|Group wheel or sudo not found|Failed to get password aging information"
 )
 
